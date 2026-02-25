@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const PRIORITY_LABELS = {
-  high: '🔴 Needs Your Attention',
-  medium: '🟡 Following',
-  low: '⚪ Team / Low Priority',
+  high: 'Action Needed',
+  medium: 'For Your Info',
+  noise: 'State Changes',
+  other: 'Everything Else',
 };
 
 const TYPE_ICONS = {
@@ -33,7 +34,22 @@ function timeAgo(dateStr) {
   return `${days}d ago`;
 }
 
+function stateLabel(n) {
+  if (n.type === 'PullRequest') {
+    if (n.merged) return 'merged';
+    if (n.state === 'closed') return 'closed';
+    if (n.draft) return 'draft';
+    if (n.state === 'open') return 'open';
+  }
+  if (n.type === 'Issue') {
+    if (n.state === 'closed') return 'closed';
+    if (n.state === 'open') return 'open';
+  }
+  return null;
+}
+
 function NotificationRow({ n, onDismiss }) {
+  const sl = stateLabel(n);
   const handleClick = (e) => {
     e.preventDefault();
     window.api.openExternal(n.url);
@@ -43,6 +59,30 @@ function NotificationRow({ n, onDismiss }) {
     e.preventDefault();
     window.api.showLinkMenu(n.url);
   };
+
+  const compact = n.priority !== 'high';
+
+  if (compact) {
+    return (
+      <div className="notification-row compact" data-priority={n.priority}>
+        <a
+          className="notif-title"
+          href={n.url}
+          onClick={handleClick}
+          onContextMenu={handleContextMenu}
+          title={n.url}
+        >
+          {n.title}
+        </a>
+        <span className="notif-repo">{n.repo.replace('github/', '')}</span>
+        {sl && <span className={`notif-state notif-state-${sl}`}>{sl}</span>}
+        <span className="notif-time">{timeAgo(n.updated_at)}</span>
+        <button className="dismiss-btn" onClick={() => onDismiss(n.id)} title="Mark as read">
+          ✕
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="notification-row" data-priority={n.priority}>
@@ -59,8 +99,9 @@ function NotificationRow({ n, onDismiss }) {
         </a>
         <div className="notif-meta">
           <span className="notif-repo">{n.repo}</span>
-          <span className="notif-reason">{REASON_LABELS[n.reason] || n.reason}</span>
+          {sl && <span className={`notif-state notif-state-${sl}`}>{sl}</span>}
           <span className="notif-time">{timeAgo(n.updated_at)}</span>
+          {n.triageReason && <span className="notif-triage">— {n.triageReason}</span>}
         </div>
       </div>
       <button className="dismiss-btn" onClick={() => onDismiss(n.id)} title="Mark as read">
@@ -70,12 +111,21 @@ function NotificationRow({ n, onDismiss }) {
   );
 }
 
-function Section({ priority, notifications, onDismiss }) {
+function Section({ priority, notifications, onDismiss, onDismissAll }) {
   if (notifications.length === 0) return null;
   return (
     <div className={`section section-${priority}`}>
-      <h2 className="section-title">{PRIORITY_LABELS[priority]}</h2>
-      <div className="section-count">{notifications.length}</div>
+      <div className="section-header">
+        <div className="section-header-left">
+          <h2 className="section-title">{PRIORITY_LABELS[priority]}</h2>
+          <span className="section-count">{notifications.length}</span>
+        </div>
+        {priority !== 'high' && (
+          <button className="section-clear-btn" onClick={() => onDismissAll(notifications)}>
+            Clear section
+          </button>
+        )}
+      </div>
       <div className="notification-list">
         {notifications.map((n) => (
           <NotificationRow key={n.id} n={n} onDismiss={onDismiss} />
@@ -125,9 +175,24 @@ export default function App() {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
+  const handleDismissSection = async (sectionNotifications) => {
+    await Promise.all(sectionNotifications.map((n) => window.api.markThreadRead(n.id)));
+    const ids = new Set(sectionNotifications.map((n) => n.id));
+    setNotifications((prev) => prev.filter((n) => !ids.has(n.id)));
+  };
+
   const high = notifications.filter((n) => n.priority === 'high');
   const medium = notifications.filter((n) => n.priority === 'medium');
-  const low = notifications.filter((n) => n.priority === 'low');
+  const noise = notifications.filter((n) => {
+    if (n.priority !== 'noise') return false;
+    const sl = stateLabel(n);
+    return sl === 'merged' || sl === 'closed';
+  });
+  const other = notifications.filter((n) => {
+    if (n.priority !== 'noise') return false;
+    const sl = stateLabel(n);
+    return sl !== 'merged' && sl !== 'closed';
+  });
   const hasHigh = high.length > 0;
 
   return (
@@ -143,7 +208,7 @@ export default function App() {
           onClick={handleMarkAllRead}
           disabled={markingAll || notifications.length === 0}
         >
-          {markingAll ? 'Clearing…' : 'Mark All as Read'}
+          {markingAll ? 'Clearing…' : 'Mark all as read'}
         </button>
       </header>
 
@@ -158,16 +223,16 @@ export default function App() {
 
         {!loading && notifications.length > 0 && (
           <>
-            <Section priority="high" notifications={high} onDismiss={handleDismiss} />
-            <Section priority="medium" notifications={medium} onDismiss={handleDismiss} />
-
-            {!hasHigh && (medium.length > 0 || low.length > 0) && (
+            {!hasHigh && (
               <div className="defer-banner">
                 Nothing needs your direct attention. Safe to clear all.
               </div>
             )}
 
-            <Section priority="low" notifications={low} onDismiss={handleDismiss} />
+            <Section priority="high" notifications={high} onDismiss={handleDismiss} onDismissAll={handleDismissSection} />
+            <Section priority="medium" notifications={medium} onDismiss={handleDismiss} onDismissAll={handleDismissSection} />
+            <Section priority="noise" notifications={noise} onDismiss={handleDismiss} onDismissAll={handleDismissSection} />
+            <Section priority="other" notifications={other} onDismiss={handleDismiss} onDismissAll={handleDismissSection} />
           </>
         )}
       </main>
