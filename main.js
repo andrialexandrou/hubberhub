@@ -58,11 +58,13 @@ async function getUserLogin() {
 }
 
 function extractPRNumber(url) {
-  const match = url?.match(/\/pulls\/(\d+)$/);
+  if (!url) return null;
+  const match = url.match(/\/pulls\/(\d+)$/);
   return match ? match[1] : null;
 }
 
 async function enrichNotifications(notifications) {
+  if (!Array.isArray(notifications) || notifications.length === 0) return [];
   const login = await getUserLogin();
 
   const enriched = await Promise.all(
@@ -107,7 +109,7 @@ async function enrichNotifications(notifications) {
         priorityOrder = 3;
       }
 
-      const prNumber = extractPRNumber(n.subject.url);
+      const prNumber = extractPRNumber(n.subject?.url);
       let htmlUrl = `https://github.com/${n.repository.full_name}`;
       if (n.subject.type === 'PullRequest' && prNumber) {
         htmlUrl = `https://github.com/${n.repository.full_name}/pull/${prNumber}`;
