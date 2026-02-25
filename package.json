@@ -8,7 +8,7 @@
     "build": "vite build",
     "start": "electron .",
     "package": "vite build && electron-packager . HubberHub --platform=darwin --arch=arm64 --icon=assets/icon.icns --out=out --overwrite --asar",
-    "install-app": "npm run package && cp -R out/HubberHub-darwin-arm64/HubberHub.app /Applications/ && echo 'Installed to /Applications/HubberHub.app'"
+    "install-app": "osascript -e 'quit app \"HubberHub\"' 2>/dev/null; sleep 1 && npm run package && cp -R out/HubberHub-darwin-arm64/HubberHub.app /Applications/ && echo 'Installed to /Applications/HubberHub.app'"
   },
   "keywords": [],
   "author": "Andri Alexandrou <andri.j.alexandrou@gmail.com>",
