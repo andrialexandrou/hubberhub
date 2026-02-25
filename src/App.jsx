@@ -145,7 +145,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="main">
+      <main className={`main${notifications.length > 0 && !loading ? ' has-content' : ''}`}>
         {loading && <div className="status">Loading notifications…</div>}
         {error && <div className="status error">Error: {error}</div>}
         {!loading && !error && notifications.length === 0 && (

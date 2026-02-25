@@ -66,7 +66,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 16px;
+  padding: 36px 20px 14px;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
 }
@@ -78,7 +78,7 @@ body {
 }
 
 .header h1 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -112,11 +112,12 @@ body {
   background: #1f6feb;
   color: #fff;
   border: none;
-  padding: 8px 20px;
+  padding: 6px 16px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: opacity 0.15s;
 }
 
 .mark-all-btn:hover:not(:disabled) {
@@ -124,23 +125,33 @@ body {
 }
 
 .mark-all-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.35;
   cursor: default;
 }
 
 /* Main */
 .main {
   flex: 1;
-  padding: 16px 24px;
+  padding: 16px 20px;
   overflow-y: auto;
   -webkit-app-region: no-drag;
+  display: flex;
+  flex-direction: column;
+}
+
+.main.has-content {
+  display: block;
 }
 
 .status {
   text-align: center;
-  padding: 48px 0;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 48px;
 }
 
 .status.error {
