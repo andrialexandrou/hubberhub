@@ -130,7 +130,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="header-left">
-          <h1>Notifications</h1>
+          <h1>HubberHub</h1>
           <span className="total-badge">{notifications.length}</span>
           <button className="refresh-btn" onClick={load} disabled={loading}>
             ↻

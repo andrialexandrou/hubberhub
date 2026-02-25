@@ -2,3 +2,5 @@ node_modules/
 dist/
 out/
 .DS_Store
+assets/icon.iconset/
+assets/icon_1024.png

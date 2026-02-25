@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1f6feb"/>
+      <stop offset="100%" style="stop-color:#0550ae"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <!-- Octocat-inspired silhouette (simplified hub icon) -->
+  <g transform="translate(512,480)" fill="white">
+    <!-- Head -->
+    <circle cx="0" cy="-120" r="140"/>
+    <!-- Eyes -->
+    <circle cx="-50" cy="-140" r="22" fill="#1f6feb"/>
+    <circle cx="50" cy="-140" r="22" fill="#1f6feb"/>
+    <!-- Body -->
+    <ellipse cx="0" cy="80" rx="160" ry="120"/>
+    <!-- Tentacles/arms -->
+    <rect x="-200" y="40" width="80" height="20" rx="10"/>
+    <rect x="120" y="40" width="80" height="20" rx="10"/>
+    <rect x="-210" y="60" width="60" height="16" rx="8" transform="rotate(30,-210,60)"/>
+    <rect x="150" y="60" width="60" height="16" rx="8" transform="rotate(-30,150,60)"/>
+    <!-- Ears/horns -->
+    <polygon points="-100,-240 -60,-160 -140,-160"/>
+    <polygon points="100,-240 60,-160 140,-160"/>
+  </g>
+  <!-- Notification dot -->
+  <circle cx="780" cy="244" r="80" fill="#f85149"/>
+  <text x="780" y="272" text-anchor="middle" fill="white" font-size="100" font-weight="bold" font-family="sans-serif">!</text>
+</svg>

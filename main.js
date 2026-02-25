@@ -215,7 +215,9 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 720,
     height: 800,
+    title: 'HubberHub',
     titleBarStyle: 'hiddenInset',
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -230,5 +232,16 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.setName('HubberHub');
+
+app.whenReady().then(() => {
+  // Enable launch at login (works when packaged as .app)
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    name: 'HubberHub',
+  });
+
+  createWindow();
+});
+
 app.on('window-all-closed', () => app.quit());
