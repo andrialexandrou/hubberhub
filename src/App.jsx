@@ -107,7 +107,11 @@ export default function App() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   const handleMarkAllRead = async () => {
     setMarkingAll(true);
@@ -130,7 +134,10 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="header-spacer" />
-        <h1>HubberHub</h1>
+        <div className="header-center">
+          <h1>HubberHub</h1>
+          <button className="refresh-btn" onClick={load} disabled={loading}>↻</button>
+        </div>
         <button
           className="mark-all-btn"
           onClick={handleMarkAllRead}
@@ -139,13 +146,6 @@ export default function App() {
           {markingAll ? 'Clearing…' : 'Mark All as Read'}
         </button>
       </header>
-
-      <div className="toolbar">
-        <span className="total-badge">{notifications.length} notification{notifications.length !== 1 ? 's' : ''}</span>
-        <button className="refresh-btn" onClick={load} disabled={loading}>
-          ↻ Refresh
-        </button>
-      </div>
 
       <main className={`main${notifications.length > 0 && !loading ? ' has-content' : ''}`}>
         {loading && <div className="status">Loading notifications…</div>}

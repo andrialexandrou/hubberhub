@@ -69,31 +69,25 @@ body {
   padding: 12px 16px 10px;
   height: 52px;
   -webkit-app-region: drag;
+  position: relative;
 }
 
 .header-spacer {
   width: 70px;
 }
 
+.header-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .header h1 {
   font-size: 14px;
   font-weight: 600;
-  text-align: center;
-  flex: 1;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 20px;
-  border-bottom: 1px solid var(--border);
-}
-
-.total-badge {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  font-weight: 500;
 }
 
 .refresh-btn {
@@ -101,9 +95,10 @@ body {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
-  padding: 4px 0;
+  padding: 2px 4px;
+  border-radius: 4px;
 }
 
 .refresh-btn:hover {
