@@ -129,13 +129,8 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <div className="header-left">
-          <h1>HubberHub</h1>
-          <span className="total-badge">{notifications.length}</span>
-          <button className="refresh-btn" onClick={load} disabled={loading}>
-            ↻
-          </button>
-        </div>
+        <div className="header-spacer" />
+        <h1>HubberHub</h1>
         <button
           className="mark-all-btn"
           onClick={handleMarkAllRead}
@@ -144,6 +139,13 @@ export default function App() {
           {markingAll ? 'Clearing…' : 'Mark All as Read'}
         </button>
       </header>
+
+      <div className="toolbar">
+        <span className="total-badge">{notifications.length} notification{notifications.length !== 1 ? 's' : ''}</span>
+        <button className="refresh-btn" onClick={load} disabled={loading}>
+          ↻ Refresh
+        </button>
+      </div>
 
       <main className={`main${notifications.length > 0 && !loading ? ' has-content' : ''}`}>
         {loading && <div className="status">Loading notifications…</div>}
