@@ -34,6 +34,16 @@ function timeAgo(dateStr) {
 }
 
 function NotificationRow({ n, onDismiss }) {
+  const handleClick = (e) => {
+    e.preventDefault();
+    window.api.openExternal(n.url);
+  };
+
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    window.api.showLinkMenu(n.url);
+  };
+
   return (
     <div className="notification-row" data-priority={n.priority}>
       <div className="notif-icon">{TYPE_ICONS[n.type] || '○'}</div>
@@ -41,8 +51,8 @@ function NotificationRow({ n, onDismiss }) {
         <a
           className="notif-title"
           href={n.url}
-          target="_blank"
-          rel="noopener noreferrer"
+          onClick={handleClick}
+          onContextMenu={handleContextMenu}
           title={n.url}
         >
           {n.title}

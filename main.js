@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, clipboard } = require('electron');
 const path = require('path');
 const { execSync } = require('child_process');
 
@@ -141,6 +141,24 @@ async function enrichNotifications(notifications) {
 }
 
 // IPC Handlers
+ipcMain.handle('open-external', (_event, url) => {
+  shell.openExternal(url);
+});
+
+ipcMain.handle('show-link-menu', (_event, url) => {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Open in Browser',
+      click: () => shell.openExternal(url),
+    },
+    {
+      label: 'Copy URL',
+      click: () => clipboard.writeText(url),
+    },
+  ]);
+  menu.popup();
+});
+
 ipcMain.handle('fetch-notifications', async () => {
   try {
     const raw = await fetchAllNotifications();
