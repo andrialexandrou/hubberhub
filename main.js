@@ -32,6 +32,7 @@ async function fetchAllNotifications() {
   while (url) {
     const res = await ghFetch(url);
     const data = await res.json();
+    if (!Array.isArray(data)) break;
     all = all.concat(data);
     const link = res.headers.get('link');
     const next = link?.match(/<([^>]+)>;\s*rel="next"/);
@@ -68,7 +69,9 @@ async function enrichNotifications(notifications) {
   const login = await getUserLogin();
 
   const enriched = await Promise.all(
-    notifications.map(async (n) => {
+    notifications
+      .filter((n) => n && n.repository && n.subject)
+      .map(async (n) => {
       let priority = 'low';
       let priorityOrder = 3;
 
