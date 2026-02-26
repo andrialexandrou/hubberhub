@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Menu, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, clipboard, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -8,6 +8,7 @@ const CACHE_DIR = path.join(app.getPath('userData'), 'cache');
 const CONTEXT_CACHE_FILE = path.join(CACHE_DIR, 'subject-context.json');
 
 let contextCache = {}; // keyed by subject URL → { updated_at, state, merged, latestComment }
+const seenActionIds = new Set(); // track notified action items to avoid duplicates
 
 function loadCache() {
   try {
@@ -208,8 +209,12 @@ function classifyByRules(n, login) {
   if ((state === 'closed' || merged) && n.reason === 'subscribed')
     return { cat: 'noise', why: 'State change on subscribed thread' };
 
-  // User participated (commented/authored) — ambiguous, needs LLM
-  if (n.reason === 'comment' || n.reason === 'author')
+  // User participated (commented/authored) — someone responded, needs attention
+  if (n.reason === 'comment')
+    return { cat: 'action', why: 'Reply on thread you commented on' };
+
+  // User authored — ambiguous, needs LLM
+  if (n.reason === 'author')
     return null; // → send to LLM
 
   // Subscribed with no personal signals → noise
@@ -411,6 +416,31 @@ async function enrichNotifications(notifications) {
 
   enriched.sort((a, b) => a.priorityOrder - b.priorityOrder);
   saveCache();
+
+  // Desktop notifications for new action items
+  const actionItems = enriched.filter((n) => n.priority === 'high' && n.unread);
+  const newActions = actionItems.filter((n) => !seenActionIds.has(n.id));
+  if (newActions.length > 0) {
+    newActions.forEach((n) => seenActionIds.add(n.id));
+    if (newActions.length === 1) {
+      const n = newActions[0];
+      const notif = new Notification({
+        title: 'Action needed',
+        body: `${n.title}\n${n.repo}`,
+        silent: true,
+      });
+      notif.on('click', () => shell.openExternal(n.url));
+      notif.show();
+    } else {
+      const notif = new Notification({
+        title: `${newActions.length} items need your attention`,
+        body: newActions.slice(0, 3).map((n) => n.title).join('\n'),
+        silent: true,
+      });
+      notif.show();
+    }
+  }
+
   return enriched;
 }
 

@@ -142,7 +142,9 @@ export default function App() {
   const [markingAll, setMarkingAll] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // Only show full loading state on first load (when no data yet)
+    const isFirstLoad = notifications.length === 0;
+    if (isFirstLoad) setLoading(true);
     setError(null);
     try {
       const data = await window.api.fetchNotifications();
@@ -155,7 +157,7 @@ export default function App() {
       setError(err.message);
     }
     setLoading(false);
-  }, []);
+  }, [notifications.length]);
 
   useEffect(() => {
     load();
@@ -212,8 +214,8 @@ export default function App() {
         </button>
       </header>
 
-      <main className={`main${notifications.length > 0 && !loading ? ' has-content' : ''}`}>
-        {loading && <div className="status">Loading notifications…</div>}
+      <main className={`main${notifications.length > 0 ? ' has-content' : ''}`}>
+        {loading && notifications.length === 0 && <div className="status">Loading notifications…</div>}
         {error && <div className="status error">Error: {error}</div>}
         {!loading && !error && notifications.length === 0 && (
           <div className="status empty">
@@ -221,7 +223,7 @@ export default function App() {
           </div>
         )}
 
-        {!loading && notifications.length > 0 && (
+        {notifications.length > 0 && (
           <>
             {!hasHigh && (
               <div className="defer-banner">
