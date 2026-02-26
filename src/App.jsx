@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import inboxZeroSvg from '../assets/inbox-zero.svg';
 
 const PRIORITY_LABELS = {
   high: 'Action Needed',
@@ -210,16 +211,18 @@ export default function App() {
           onClick={handleMarkAllRead}
           disabled={markingAll || notifications.length === 0}
         >
+          {loading && <span className="fetch-dot" />}
           {markingAll ? 'Clearing…' : 'Mark all as read'}
         </button>
       </header>
 
       <main className={`main${notifications.length > 0 ? ' has-content' : ''}`}>
-        {loading && notifications.length === 0 && <div className="status">Loading notifications…</div>}
         {error && <div className="status error">Error: {error}</div>}
-        {!loading && !error && notifications.length === 0 && (
+        {!error && notifications.length === 0 && (
           <div className="status empty">
-            🎉 All clear — no notifications!
+            <img src={inboxZeroSvg} alt="" className="inbox-zero-img" />
+            <h2 className="inbox-zero-title">All caught up!</h2>
+            <p className="inbox-zero-subtitle">Take a break, write some code, do what you do best.</p>
           </div>
         )}
 

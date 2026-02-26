@@ -479,22 +479,33 @@ ipcMain.handle('fetch-notifications', async () => {
 ipcMain.handle('mark-all-read', async () => {
   try {
     const token = getToken();
-    // Fetch current unread notification thread IDs
+    // Bulk mark as read first (fast)
+    await fetch('https://api.github.com/notifications', {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify({ last_read_at: new Date().toISOString() }),
+    });
+    // Then mark each as done (DELETE)
     const notifications = await fetchAllNotifications();
-    // Mark each as done (DELETE)
-    await Promise.all(
-      notifications.map((n) =>
-        fetch(`https://api.github.com/notifications/threads/${n.id}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
-        })
-      )
-    );
-    console.log(`[API] Marked ${notifications.length} threads as done`);
+    if (notifications.length > 0) {
+      await Promise.all(
+        notifications.map((n) =>
+          fetch(`https://api.github.com/notifications/threads/${n.id}`, {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          })
+        )
+      );
+    }
+    console.log(`[API] Marked all notifications as done`);
     return { success: true };
   } catch (err) {
     return { error: err.message };
@@ -504,6 +515,7 @@ ipcMain.handle('mark-all-read', async () => {
 ipcMain.handle('mark-thread-read', async (_event, threadId) => {
   try {
     const token = getToken();
+    // Mark as done (DELETE)
     await fetch(`https://api.github.com/notifications/threads/${threadId}`, {
       method: 'DELETE',
       headers: {
