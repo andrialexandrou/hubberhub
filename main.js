@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Menu, clipboard, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, clipboard, Notification, Tray, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -441,6 +441,9 @@ async function enrichNotifications(notifications) {
     }
   }
 
+  // Update tray badge
+  updateTrayBadge(actionItems.length);
+
   return enriched;
 }
 
@@ -576,6 +579,55 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }
+
+  // Hide window instead of closing (app stays in tray)
+  win.on('close', (e) => {
+    if (!app.isQuitting) {
+      e.preventDefault();
+      win.hide();
+    }
+  });
+
+  win.on('closed', () => {
+    mainWindow = null;
+  });
+
+  mainWindow = win;
+}
+
+let tray = null;
+let mainWindow = null;
+
+function createTray() {
+  const trayIcon = nativeImage.createFromPath(
+    path.join(__dirname, 'assets', 'trayTemplate.png')
+  );
+  trayIcon.setTemplateImage(true);
+  tray = new Tray(trayIcon);
+  tray.setToolTip('HubberHub');
+  tray.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+      app.dock.show();
+    } else {
+      createWindow();
+    }
+  });
+}
+
+function updateTrayBadge(actionCount) {
+  if (!tray) return;
+  if (actionCount > 0) {
+    // Green icon — NOT a template so macOS preserves the color
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayGreen.png'));
+    tray.setImage(icon);
+  } else {
+    // Black template icon — macOS auto-adapts for light/dark
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'));
+    icon.setTemplateImage(true);
+    tray.setImage(icon);
+  }
 }
 
 app.setName('HubberHub');
@@ -597,6 +649,7 @@ app.whenReady().then(() => {
     name: 'HubberHub',
   });
 
+  createTray();
   createWindow();
 
   app.on('render-process-gone', (_event, _wc, details) => {
@@ -604,4 +657,10 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => app.quit());
+app.on('before-quit', () => {
+  app.isQuitting = true;
+});
+
+app.on('window-all-closed', () => {
+  // Don't quit — keep running in tray
+});
