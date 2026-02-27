@@ -605,7 +605,8 @@ function createTray() {
   trayIcon.setTemplateImage(true);
   tray = new Tray(trayIcon);
   tray.setToolTip('HubberHub');
-  tray.on('click', () => {
+
+  const showApp = () => {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
@@ -613,7 +614,15 @@ function createTray() {
     } else {
       createWindow();
     }
-  });
+  };
+
+  tray.on('click', showApp);
+
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open HubberHub', click: showApp },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
+  ]));
 }
 
 function updateTrayBadge(actionCount) {
