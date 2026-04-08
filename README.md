@@ -55,4 +55,4 @@ npm run build && npm run package
 
 ## Built with
 
-Claude via [GitHub Copilot CLI](https://githubnext.com/projects/copilot-cli/)
+Claude via [GitHub Copilot CLI](https://githubnext.com/projects/copilot-cli/), using a custom agent skill for scaffolding and packaging native macOS desktop apps with Electron + React.
