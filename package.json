@@ -13,7 +13,7 @@
   "keywords": [],
   "author": "Andri Alexandrou <andri.j.alexandrou@gmail.com>",
   "license": "ISC",
-  "description": "GitHub notifications triage app for Hubbers",
+  "description": "Smart GitHub notifications triage app with AI-powered classification",
   "dependencies": {
     "electron": "^40.6.1",
     "react": "^19.2.4",
