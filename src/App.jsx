@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import inboxZeroSvg from '../assets/inbox-zero.svg';
 
 const PRIORITY_LABELS = {
@@ -58,14 +58,16 @@ function NotificationRow({ n, onDismiss }) {
 
   const handleContextMenu = (e) => {
     e.preventDefault();
-    window.api.showLinkMenu(n.url);
+    window.api.showNotifMenu(n.url, n.id);
   };
 
   const compact = n.priority !== 'high';
 
   if (compact) {
+    const actor = n.lastCommentBy || n.author;
     return (
       <div className="notification-row compact" data-priority={n.priority}>
+        {actor && <span className="notif-actor">{actor}</span>}
         <a
           className="notif-title"
           href={n.url}
@@ -75,6 +77,7 @@ function NotificationRow({ n, onDismiss }) {
         >
           {n.title}
         </a>
+        {n.author && n.author !== actor && <span className="notif-author">by {n.author}</span>}
         <span className="notif-repo">{n.repo.replace('github/', '')}</span>
         {sl && <span className={`notif-state notif-state-${sl}`}>{sl}</span>}
         <span className="notif-time">{timeAgo(n.updated_at)}</span>
@@ -85,19 +88,25 @@ function NotificationRow({ n, onDismiss }) {
     );
   }
 
+  const actor = n.lastCommentBy || n.author;
+
   return (
     <div className="notification-row" data-priority={n.priority}>
       <div className="notif-icon">{TYPE_ICONS[n.type] || '○'}</div>
       <div className="notif-body">
-        <a
-          className="notif-title"
-          href={n.url}
-          onClick={handleClick}
-          onContextMenu={handleContextMenu}
-          title={n.url}
-        >
-          {n.title}
-        </a>
+        <div className="notif-title-line">
+          {actor && <span className="notif-actor">{actor}</span>}
+          <a
+            className="notif-title"
+            href={n.url}
+            onClick={handleClick}
+            onContextMenu={handleContextMenu}
+            title={n.url}
+          >
+            {n.title}
+          </a>
+          {n.author && n.author !== actor && <span className="notif-author">by {n.author}</span>}
+        </div>
         <div className="notif-meta">
           <span className="notif-repo">{n.repo}</span>
           {sl && <span className={`notif-state notif-state-${sl}`}>{sl}</span>}
@@ -140,31 +149,51 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [authError, setAuthError] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const hasLoadedOnce = React.useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (retryCount = 0) => {
     // Only show full loading state on first load (when no data yet)
-    const isFirstLoad = notifications.length === 0;
-    if (isFirstLoad) setLoading(true);
+    if (!hasLoadedOnce.current) setLoading(true);
     setError(null);
+    setAuthError(false);
     try {
       const data = await window.api.fetchNotifications();
       if (data.error) {
+        // Auto-retry on first load errors
+        if (!hasLoadedOnce.current && retryCount < 2) {
+          setTimeout(() => load(retryCount + 1), 3000);
+          return;
+        }
         setError(data.error);
+        setAuthError(!!data.authError);
       } else {
         setNotifications(data);
       }
     } catch (err) {
+      if (!hasLoadedOnce.current && retryCount < 2) {
+        setTimeout(() => load(retryCount + 1), 3000);
+        return;
+      }
       setError(err.message);
     }
+    hasLoadedOnce.current = true;
     setLoading(false);
-  }, [notifications.length]);
+  }, []);
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    window.api.onRefresh(() => load());
+    window.api.onThreadRemoved((threadId) => {
+      setNotifications((prev) => prev.filter((n) => n.id !== threadId));
+    });
   }, [load]);
+
+  useEffect(() => {
+    const actionCount = notifications.filter((n) => n.priority === 'high').length;
+    window.api.updateTrayBadge(actionCount);
+  }, [notifications]);
 
   const handleMarkAllRead = async () => {
     setMarkingAll(true);
@@ -217,8 +246,22 @@ export default function App() {
       </header>
 
       <main className={`main${notifications.length > 0 ? ' has-content' : ''}`}>
-        {error && <div className="status error">Error: {error}</div>}
-        {!error && notifications.length === 0 && (
+        {error && authError && (
+          <div className="status auth-error">
+            <div className="auth-error-icon">🔑</div>
+            <h2 className="auth-error-title">GitHub authentication needed</h2>
+            <p className="auth-error-body">
+              HubberHub uses the GitHub CLI for authentication.
+              Open your terminal and run:
+            </p>
+            <code className="auth-error-command">gh auth login</code>
+            <p className="auth-error-hint">
+              Then click refresh above — no restart needed.
+            </p>
+          </div>
+        )}
+        {error && !authError && <div className="status error">Error: {error}</div>}
+        {!error && !loading && notifications.length === 0 && (
           <div className="status empty">
             <img src={inboxZeroSvg} alt="" className="inbox-zero-img" />
             <h2 className="inbox-zero-title">All caught up!</h2>

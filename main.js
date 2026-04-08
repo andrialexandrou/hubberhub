@@ -1,7 +1,17 @@
-const { app, BrowserWindow, ipcMain, shell, Menu, clipboard, Notification, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, clipboard, Notification, Tray, nativeImage, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
+
+// macOS GUI apps get a minimal PATH that excludes Homebrew — fix it early
+if (process.platform === 'darwin') {
+  const extraPaths = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin'];
+  const currentPath = process.env.PATH || '';
+  const missing = extraPaths.filter(p => !currentPath.includes(p));
+  if (missing.length) {
+    process.env.PATH = [...missing, currentPath].join(':');
+  }
+}
 
 // --- Cache ---
 const CACHE_DIR = path.join(app.getPath('userData'), 'cache');
@@ -9,6 +19,7 @@ const CONTEXT_CACHE_FILE = path.join(CACHE_DIR, 'subject-context.json');
 
 let contextCache = {}; // keyed by subject URL → { updated_at, state, merged, latestComment }
 const seenActionIds = new Set(); // track notified action items to avoid duplicates
+const activeNotifications = []; // track shown desktop notifications for dismissal
 
 function loadCache() {
   try {
@@ -69,10 +80,16 @@ function getToken() {
   if (ghToken) return ghToken;
   try {
     ghToken = execSync('gh auth token', { encoding: 'utf-8' }).trim();
-  } catch {
+  } catch (err) {
+    console.warn('[Auth] gh auth token failed:', err.message);
     ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
   }
+  if (!ghToken) console.error('[Auth] No GitHub token found — API calls will fail');
   return ghToken;
+}
+
+function clearToken() {
+  ghToken = null;
 }
 
 async function ghFetch(url) {
@@ -92,6 +109,10 @@ async function fetchAllNotifications() {
   let url = 'https://api.github.com/notifications?per_page=50';
   while (url) {
     const res = await ghFetch(url);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GitHub API ${res.status}: ${body.slice(0, 200)}`);
+    }
     const data = await res.json();
     if (!Array.isArray(data)) break;
     all = all.concat(data);
@@ -128,15 +149,20 @@ function extractPRNumber(url) {
 async function fetchLatestComment(subjectUrl) {
   if (!subjectUrl) return null;
   try {
-    // Get the latest comment on the thread
-    const commentsUrl = subjectUrl.replace(/\/?$/, '/comments?per_page=1&direction=desc');
+    const commentsUrl = subjectUrl.replace(/\/?$/, '/comments?per_page=5&direction=desc');
     const res = await ghFetch(commentsUrl);
     const comments = await res.json();
     if (Array.isArray(comments) && comments.length > 0) {
+      // Skip bot comments to find the latest human commenter
+      const human = comments.find((c) => {
+        const login = c.user?.login || '';
+        return !login.endsWith('[bot]') && c.user?.type !== 'Bot';
+      });
+      const pick = human || comments[0];
       return {
-        author: comments[0].user?.login,
-        body: (comments[0].body || '').slice(0, 300),
-        created_at: comments[0].created_at,
+        author: pick.user?.login,
+        body: (pick.body || '').slice(0, 300),
+        created_at: pick.created_at,
       };
     }
   } catch {}
@@ -169,6 +195,29 @@ async function fetchSubjectState(subjectUrl) {
 }
 
 // Deterministic rules engine — handles clear-cut cases without LLM
+async function checkUserParticipated(subjectUrl, login) {
+  if (!subjectUrl || !login) return false;
+  try {
+    // Check review comments (PR review threads)
+    const reviewsUrl = subjectUrl.replace(/\/?$/, '/reviews?per_page=100');
+    const res = await ghFetch(reviewsUrl);
+    if (res.ok) {
+      const reviews = await res.json();
+      if (Array.isArray(reviews) && reviews.some((r) => r.user?.login === login)) return true;
+    }
+  } catch {}
+  try {
+    // Check issue/PR comments
+    const commentsUrl = subjectUrl.replace(/\/?$/, '/comments?per_page=100');
+    const res = await ghFetch(commentsUrl);
+    if (res.ok) {
+      const comments = await res.json();
+      if (Array.isArray(comments) && comments.some((c) => c.user?.login === login)) return true;
+    }
+  } catch {}
+  return false;
+}
+
 function classifyByRules(n, login) {
   const reviewers = n.subjectState?.requested_reviewers || [];
   const assignees = n.subjectState?.assignees || [];
@@ -181,9 +230,12 @@ function classifyByRules(n, login) {
   // Team mention → noise
   if (n.reason === 'team_mention') return { cat: 'noise', why: 'Team mention only' };
 
-  // Team-only review → noise
-  if (n.reason === 'review_requested' && !reviewers.includes(login) && teams.length > 0)
-    return { cat: 'noise', why: 'Team-only review request' };
+  // Team-only or stale review request → noise (unless user participated)
+  if (n.reason === 'review_requested' && !reviewers.includes(login)) {
+    if (n.userParticipated)
+      return { cat: 'action', why: 'You participated in this review' };
+    return { cat: 'noise', why: 'Not personally requested to review' };
+  }
 
   // Personal review request → action
   if (reviewers.includes(login))
@@ -217,9 +269,12 @@ function classifyByRules(n, login) {
   if (n.reason === 'author')
     return null; // → send to LLM
 
-  // Subscribed with no personal signals → noise
-  if (n.reason === 'subscribed')
+  // Subscribed with no personal signals → noise (unless user participated)
+  if (n.reason === 'subscribed') {
+    if (n.userParticipated)
+      return { cat: 'action', why: 'You participated in this thread' };
     return { cat: 'noise', why: 'Subscribed, no personal involvement' };
+  }
 
   // Anything else unrecognized → ambiguous, send to LLM
   return null;
@@ -348,17 +403,19 @@ async function enrichNotifications(notifications) {
       }
 
       // Check cache first
-      let latestComment, subjectState;
+      let latestComment, subjectState, userParticipated;
       const cached = getCachedContext(n.subject?.url, n.updated_at);
       if (cached) {
         latestComment = cached.latestComment;
         subjectState = cached.subjectState;
+        userParticipated = cached.userParticipated;
       } else {
-        [latestComment, subjectState] = await Promise.all([
+        [latestComment, subjectState, userParticipated] = await Promise.all([
           fetchLatestComment(n.subject?.url),
           fetchSubjectState(n.subject?.url),
+          checkUserParticipated(n.subject?.url, login),
         ]);
-        setCachedContext(n.subject?.url, n.updated_at, { latestComment, subjectState });
+        setCachedContext(n.subject?.url, n.updated_at, { latestComment, subjectState, userParticipated });
       }
 
       return {
@@ -372,6 +429,7 @@ async function enrichNotifications(notifications) {
         unread: n.unread,
         latestComment,
         subjectState,
+        userParticipated,
       };
     })
   );
@@ -409,6 +467,8 @@ async function enrichNotifications(notifications) {
       state: n.subjectState?.state || null,
       merged: n.subjectState?.merged || false,
       draft: n.subjectState?.draft || false,
+      author: n.subjectState?.user || null,
+      lastCommentBy: n.latestComment?.author || null,
       latestComment: undefined,
       subjectState: undefined,
     };
@@ -431,6 +491,7 @@ async function enrichNotifications(notifications) {
       });
       notif.on('click', () => shell.openExternal(n.url));
       notif.show();
+      activeNotifications.push(notif);
     } else {
       const notif = new Notification({
         title: `${newActions.length} items need your attention`,
@@ -438,6 +499,7 @@ async function enrichNotifications(notifications) {
         silent: true,
       });
       notif.show();
+      activeNotifications.push(notif);
     }
   }
 
@@ -452,7 +514,7 @@ ipcMain.handle('open-external', (_event, url) => {
   shell.openExternal(url);
 });
 
-ipcMain.handle('show-link-menu', (_event, url) => {
+ipcMain.handle('show-notif-menu', (_event, url, threadId) => {
   const menu = Menu.buildFromTemplate([
     {
       label: 'Open in Browser',
@@ -462,21 +524,61 @@ ipcMain.handle('show-link-menu', (_event, url) => {
       label: 'Copy URL',
       click: () => clipboard.writeText(url),
     },
+    { type: 'separator' },
+    {
+      label: 'Unsubscribe',
+      click: async () => {
+        try {
+          const token = getToken();
+          const headers = {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          };
+          // Unsubscribe from future updates
+          await fetch(`https://api.github.com/notifications/threads/${threadId}/subscription`, {
+            method: 'DELETE',
+            headers,
+          });
+          // Also mark as done so it leaves the inbox
+          await fetch(`https://api.github.com/notifications/threads/${threadId}`, {
+            method: 'DELETE',
+            headers,
+          });
+          console.log(`[API] Unsubscribed + marked done thread ${threadId}`);
+          mainWindow?.webContents.send('thread-removed', threadId);
+        } catch (err) {
+          console.error('[API] Unsubscribe failed:', err.message);
+        }
+      },
+    },
   ]);
   menu.popup();
 });
 
 ipcMain.handle('fetch-notifications', async () => {
-  try {
-    const raw = await fetchAllNotifications();
-    const result = await enrichNotifications(raw);
-    const size = JSON.stringify(result).length;
-    console.log(`[IPC] Sending ${Array.isArray(result) ? result.length : 0} notifications (${(size / 1024).toFixed(0)}KB) to renderer`);
-    return result;
-  } catch (err) {
-    console.error('[IPC] fetch-notifications error:', err);
-    return { error: err.message };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const raw = await fetchAllNotifications();
+      const result = await enrichNotifications(raw);
+      const size = JSON.stringify(result).length;
+      console.log(`[IPC] Sending ${Array.isArray(result) ? result.length : 0} notifications (${(size / 1024).toFixed(0)}KB) to renderer`);
+      return result;
+    } catch (err) {
+      console.error(`[IPC] fetch-notifications error (attempt ${attempt + 1}):`, err.message);
+      if (attempt === 0) {
+        clearToken();
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      const isAuthError = err.message.includes('401') || err.message.includes('Bad credentials');
+      return { error: err.message, authError: isAuthError };
+    }
   }
+});
+
+ipcMain.handle('update-tray-badge', (_event, actionCount) => {
+  updateTrayBadge(actionCount);
 });
 
 ipcMain.handle('mark-all-read', async () => {
@@ -509,6 +611,7 @@ ipcMain.handle('mark-all-read', async () => {
       );
     }
     console.log(`[API] Marked all notifications as done`);
+    updateTrayBadge(0);
     return { success: true };
   } catch (err) {
     return { error: err.message };
@@ -588,6 +691,14 @@ function createWindow() {
     }
   });
 
+  // Clear desktop notifications when the window is focused
+  win.on('focus', () => {
+    while (activeNotifications.length > 0) {
+      activeNotifications.pop().close();
+    }
+    app.setBadgeCount(0);
+  });
+
   win.on('closed', () => {
     mainWindow = null;
   });
@@ -597,6 +708,12 @@ function createWindow() {
 
 let tray = null;
 let mainWindow = null;
+
+function triggerRendererRefresh() {
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('refresh-notifications');
+  }
+}
 
 function createTray() {
   const trayIcon = nativeImage.createFromPath(
@@ -611,6 +728,7 @@ function createTray() {
       mainWindow.show();
       mainWindow.focus();
       app.dock.show();
+      triggerRendererRefresh();
     } else {
       createWindow();
     }
@@ -660,6 +778,15 @@ app.whenReady().then(() => {
 
   createTray();
   createWindow();
+
+  // Re-fetch on wake from sleep — timers drift/die during suspend
+  powerMonitor.on('resume', () => {
+    console.log('[Power] Resumed from sleep, triggering refresh');
+    triggerRendererRefresh();
+  });
+
+  // Poll every 5 minutes from main process (more reliable than renderer setInterval)
+  setInterval(triggerRendererRefresh, 5 * 60 * 1000);
 
   app.on('render-process-gone', (_event, _wc, details) => {
     console.error('[CRASH] Renderer process gone:', details);

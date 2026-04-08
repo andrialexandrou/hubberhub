@@ -173,6 +173,51 @@ body {
   color: var(--red);
 }
 
+.status.auth-error {
+  color: var(--text-primary);
+  gap: 6px;
+  padding-top: 12vh;
+}
+
+.auth-error-icon {
+  font-size: 36px;
+  margin-bottom: 4px;
+}
+
+.auth-error-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.auth-error-body {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+.auth-error-command {
+  display: inline-block;
+  background: var(--bg-secondary, rgba(128, 128, 128, 0.15));
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  user-select: all;
+}
+
+.auth-error-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  opacity: 0.7;
+}
+
 .status.empty {
   gap: 4px;
   padding-bottom: 0;
@@ -242,6 +287,27 @@ body {
 .section-clear-btn:hover {
   color: var(--text);
   border-color: var(--text-secondary);
+}
+
+.notif-actor {
+  font-size: 11px;
+  color: var(--green);
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.notif-author {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.notif-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
 }
 
 /* Compact rows (FYI / noise) */
