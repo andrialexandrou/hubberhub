@@ -305,8 +305,9 @@ body {
 
 .notif-title-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
+  gap: 4px 6px;
   min-width: 0;
 }
 
@@ -407,7 +408,8 @@ body {
   font-size: 14px;
   font-weight: 500;
   line-height: 1.4;
-  display: block;
+  flex: 1;
+  min-width: 0;
 }
 
 .notif-title:hover {
@@ -416,7 +418,8 @@ body {
 
 .notif-meta {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   margin-top: 4px;
   font-size: 12px;
   color: var(--text-tertiary);

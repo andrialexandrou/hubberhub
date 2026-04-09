@@ -94,9 +94,7 @@ function NotificationRow({ n, onDismiss }) {
     <div className="notification-row" data-priority={n.priority}>
       <div className="notif-icon">{TYPE_ICONS[n.type] || '○'}</div>
       <div className="notif-body">
-        <div className="notif-title-line">
-          {actor && <span className="notif-actor">{actor}</span>}
-          <a
+        <a
             className="notif-title"
             href={n.url}
             onClick={handleClick}
@@ -105,11 +103,11 @@ function NotificationRow({ n, onDismiss }) {
           >
             {n.title}
           </a>
-          {n.author && n.author !== actor && <span className="notif-author">by {n.author}</span>}
-        </div>
         <div className="notif-meta">
+          {actor && <span className="notif-actor">{actor}</span>}
           <span className="notif-repo">{n.repo}</span>
           {sl && <span className={`notif-state notif-state-${sl}`}>{sl}</span>}
+          {n.author && n.author !== actor && <span className="notif-author">by {n.author}</span>}
           <span className="notif-time">{timeAgo(n.updated_at)}</span>
           {n.triageReason && <span className="notif-triage">— {n.triageReason}</span>}
         </div>
